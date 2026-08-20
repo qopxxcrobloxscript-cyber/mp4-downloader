@@ -8,10 +8,10 @@ const statusEl = document.getElementById('status');
 const formatsEl = document.getElementById('formats');
 const qualitySelect = document.getElementById('quality');
 
-// 最初はダウンロードボタンを無効
-dlBtn.disabled = true;
+// 最初からダウンロードボタンを有効
+dlBtn.disabled = false;
 
-// 情報取得
+// 情報取得（任意・なくてもダウンロード可能）
 infoBtn.addEventListener('click', async () => {
   const url = urlInput.value.trim();
   const key = keyInput.value.trim();
@@ -24,7 +24,6 @@ infoBtn.addEventListener('click', async () => {
   statusEl.textContent = '動画情報を取得中...';
   formatsEl.innerHTML = '';
   qualitySelect.innerHTML = '';
-  dlBtn.disabled = true;
 
   try {
     const res = await fetch('/api/info', {
@@ -42,7 +41,6 @@ infoBtn.addEventListener('click', async () => {
     }
 
     const data = await res.json();
-
     statusEl.textContent = `タイトル: ${data.title || '不明'}`;
 
     if (!data.formats || data.formats.length === 0) {
@@ -50,7 +48,6 @@ infoBtn.addEventListener('click', async () => {
       return;
     }
 
-    // 画質一覧表示
     let html = '<p><strong>利用可能な画質:</strong></p><ul>';
     data.formats.forEach(f => {
       const type = f.isHls ? 'HLS → MP4変換' : 'MP4';
@@ -59,7 +56,7 @@ infoBtn.addEventListener('click', async () => {
     html += '</ul>';
     formatsEl.innerHTML = html;
 
-    // セレクトボックスに追加
+    qualitySelect.innerHTML = '<option value="">自動選択</option>';
     data.formats
       .sort((a, b) => (b.height || 0) - (a.height || 0))
       .forEach(f => {
@@ -69,30 +66,20 @@ infoBtn.addEventListener('click', async () => {
         qualitySelect.appendChild(opt);
       });
 
-    // ダウンロードボタンを有効化
-    dlBtn.disabled = false;
-    statusEl.textContent += '　→ 画質を選んでダウンロードできます';
-
   } catch (err) {
     console.error(err);
     statusEl.textContent = 'エラー: ' + err.message;
-    dlBtn.disabled = true;
   }
 });
 
-// ダウンロード
+// ダウンロード（情報取得なしでもOK）
 dlBtn.addEventListener('click', async () => {
   const url = urlInput.value.trim();
   const key = keyInput.value.trim();
-  const quality = qualitySelect.value;
+  const quality = qualitySelect.value || null; // 空ならnull
 
   if (!url || !key) {
     alert('URLとAPIキーを入力してください');
-    return;
-  }
-
-  if (!quality) {
-    alert('画質を選択してください');
     return;
   }
 
@@ -115,7 +102,7 @@ dlBtn.addEventListener('click', async () => {
       throw new Error(err.error || `エラー: ${res.status}`);
     }
 
-    // ファイル名を取得
+    // ファイル名
     const disposition = res.headers.get('Content-Disposition');
     let filename = 'video.mp4';
     if (disposition && disposition.includes('filename=')) {
@@ -128,7 +115,7 @@ dlBtn.addEventListener('click', async () => {
     const blob = await res.blob();
     const blobUrl = URL.createObjectURL(blob);
 
-    // ファイルダウンロードを実行
+    // ① ファイルダウンロード
     const a = document.createElement('a');
     a.href = blobUrl;
     a.download = filename;
@@ -137,16 +124,13 @@ dlBtn.addEventListener('click', async () => {
     a.click();
     document.body.removeChild(a);
 
-    // 新しいタブでも開く（iPhone対策）
+    // ② 新しいタブで開く
     setTimeout(() => {
       window.open(blobUrl, '_blank');
-      statusEl.textContent = 'ダウンロードを開始しました。新しいタブでも開きました。\n（iPhoneの場合は長押しして「ビデオをダウンロード」を選んでください）';
+      statusEl.textContent = 'ダウンロードを開始しました。新しいタブでも開きました。\n（iPhoneの場合は長押しして保存してください）';
     }, 300);
 
-    // メモリ解放
-    setTimeout(() => {
-      URL.revokeObjectURL(blobUrl);
-    }, 60 * 1000);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60 * 1000);
 
   } catch (err) {
     console.error(err);
