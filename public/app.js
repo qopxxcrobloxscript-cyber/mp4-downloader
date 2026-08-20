@@ -8,11 +8,8 @@ const statusEl = document.getElementById('status');
 const formatsEl = document.getElementById('formats');
 const qualitySelect = document.getElementById('quality');
 
-// iOS判定
-function isIOS() {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-}
+// 初期状態
+dlBtn.disabled = true;
 
 // 情報取得
 infoBtn.addEventListener('click', async () => {
@@ -50,6 +47,7 @@ infoBtn.addEventListener('click', async () => {
 
     if (!data.formats || data.formats.length === 0) {
       formatsEl.innerHTML = '<p>利用可能な画質が見つかりませんでした</p>';
+      dlBtn.disabled = true;
       return;
     }
 
@@ -62,7 +60,7 @@ infoBtn.addEventListener('click', async () => {
     html += '</ul>';
     formatsEl.innerHTML = html;
 
-    // セレクトボックスに追加（高い画質順）
+    // セレクトに追加（高い順）
     data.formats
       .sort((a, b) => (b.height || 0) - (a.height || 0))
       .forEach(f => {
@@ -72,15 +70,18 @@ infoBtn.addEventListener('click', async () => {
         qualitySelect.appendChild(opt);
       });
 
+    // ここで初めてダウンロードボタンを有効化
     dlBtn.disabled = false;
+    statusEl.textContent += '　→ 画質を選んでダウンロードできます';
 
   } catch (err) {
     console.error(err);
     statusEl.textContent = 'エラー: ' + err.message;
+    dlBtn.disabled = true;
   }
 });
 
-// ダウンロード
+// ダウンロード（変換後のMP4を受け取る処理）
 dlBtn.addEventListener('click', async () => {
   const url = urlInput.value.trim();
   const key = keyInput.value.trim();
@@ -125,10 +126,11 @@ dlBtn.addEventListener('click', async () => {
       }
     }
 
+    // サーバーから返ってきた変換済みMP4を受け取る
     const blob = await res.blob();
     const blobUrl = URL.createObjectURL(blob);
 
-    // ① 通常のダウンロードを試行（PC・Androidで有効）
+    // ① 普通のダウンロードを実行
     const a = document.createElement('a');
     a.href = blobUrl;
     a.download = filename;
@@ -137,10 +139,10 @@ dlBtn.addEventListener('click', async () => {
     a.click();
     document.body.removeChild(a);
 
-    // ② iPhoneなどのために新しいタブでも開く
+    // ② 新しいタブでも開く（iPhone対策）
     setTimeout(() => {
       window.open(blobUrl, '_blank');
-      statusEl.textContent = 'ダウンロードを開始しました。新しいタブでも開きました。\n（iPhoneの場合は長押しして「ビデオをダウンロード」を選んでください）';
+      statusEl.textContent = 'ダウンロードを開始しました。新しいタブでも開きました。\n（iPhoneの場合は長押し → 「ビデオをダウンロード」を選んでください）';
     }, 400);
 
     // メモリ解放
@@ -152,6 +154,7 @@ dlBtn.addEventListener('click', async () => {
     console.error(err);
     statusEl.textContent = 'エラー: ' + err.message;
   } finally {
+    // 必ずボタンを戻す
     dlBtn.disabled = false;
     infoBtn.disabled = false;
   }
